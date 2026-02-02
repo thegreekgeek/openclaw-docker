@@ -98,6 +98,23 @@ print_banner() {
     echo -e "${NC}"
 }
 
+# Get user's home directory, handling sudo correctly
+get_user_home() {
+    if [ -n "$SUDO_USER" ]; then
+        # Running with sudo - use the actual user's home
+        local user_home
+        user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        if [ -z "$user_home" ]; then
+            # Fallback to eval if getent fails
+            user_home=$(eval echo ~"$SUDO_USER")
+        fi
+        echo "$user_home"
+    else
+        # Running normally
+        echo "$HOME"
+    fi
+}
+
 log_step() {
     echo -e "\n${BLUE}▶${NC} ${BOLD}$1${NC}"
 }
@@ -150,10 +167,23 @@ else
     exit 1
 fi
 
-# Check Docker is running
-if ! docker info &> /dev/null; then
-    log_error "Docker is not running"
-    echo -e "\n${RED}Please start Docker and try again.${NC}"
+# Check Docker is running and capture output for better error reporting
+DOCKER_INFO_OUTPUT=$(docker info 2>&1)
+DOCKER_INFO_EXIT=$?
+
+if [ $DOCKER_INFO_EXIT -ne 0 ]; then
+    log_error "Docker is not running or you don't have permission to access it"
+    
+    # Check if it's a permission issue
+    if [ "$(id -u)" -ne 0 ] && echo "$DOCKER_INFO_OUTPUT" | grep -qi "permission denied"; then
+        echo -e "\n${YELLOW}Tip: You may need to run this script with sudo or add your user to the docker group:${NC}"
+        echo -e "  ${CYAN}sudo usermod -aG docker \$USER${NC}"
+        echo -e "  ${CYAN}(then log out and log back in)${NC}"
+        echo -e "\n${YELLOW}Or run the installer with sudo:${NC}"
+        echo -e "  ${CYAN}sudo bash <(curl -fsSL https://raw.githubusercontent.com/phioranex/openclaw-docker/main/install.sh)${NC}"
+    else
+        echo -e "\n${RED}Please start Docker and try again.${NC}"
+    fi
     exit 1
 fi
 log_success "Docker is running"
@@ -174,13 +204,76 @@ log_success "Created $INSTALL_DIR"
 
 log_step "Downloading docker-compose.yml..."
 curl -fsSL "$COMPOSE_URL" -o docker-compose.yml
+
+# Update docker-compose.yml to use correct home directory when running with sudo
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(get_user_home)
+    # Replace ~/.openclaw with the actual user's home directory
+    if grep -q "~/.openclaw" docker-compose.yml; then
+        if sed -i.bak "s|~/.openclaw|$USER_HOME/.openclaw|g" docker-compose.yml; then
+            rm -f docker-compose.yml.bak
+            # Verify the replacement actually occurred
+            if ! grep -q "~/.openclaw" docker-compose.yml; then
+                log_success "Updated docker-compose.yml for sudo user ($SUDO_USER)"
+            else
+                log_warning "sed replacement may have failed, check docker-compose.yml manually"
+            fi
+        else
+            log_warning "Failed to update docker-compose.yml paths"
+        fi
+    else
+        log_warning "docker-compose.yml doesn't contain '~/.openclaw', skipping path update"
+    fi
+fi
+
 log_success "Downloaded docker-compose.yml"
 
 log_step "Creating data directories..."
-mkdir -p ~/.openclaw
-mkdir -p ~/.openclaw/workspace
-log_success "Created ~/.openclaw (config)"
-log_success "Created ~/.openclaw/workspace (workspace)"
+
+# Determine the correct home directory
+USER_HOME=$(get_user_home)
+OPENCLAW_DIR="$USER_HOME/.openclaw"
+
+mkdir -p "$OPENCLAW_DIR"
+mkdir -p "$OPENCLAW_DIR/workspace"
+
+# Fix permissions for container access
+# Docker container runs as node user (UID 1000, GID 1000)
+# Ensure the directory is writable by the container user
+if [ "$(id -u)" -eq 0 ]; then
+    # Running as root/sudo - set ownership to UID 1000 (node user in container)
+    # and grant group access to the actual user (if using sudo)
+    if [ -n "$SUDO_USER" ]; then
+        # Get the sudo user's primary group
+        SUDO_GID=$(id -g "$SUDO_USER")
+        # Set ownership: UID 1000 (container), GID to sudo user's group
+        chown -R 1000:"$SUDO_GID" "$OPENCLAW_DIR"
+        # Allow group read/write access
+        chmod -R u+rwX,g+rwX,o-rwx "$OPENCLAW_DIR"
+        log_success "Set ownership to UID 1000 with group access for $SUDO_USER"
+    else
+        # Running as actual root user, not via sudo
+        chown -R 1000:1000 "$OPENCLAW_DIR"
+        chmod -R 755 "$OPENCLAW_DIR"
+        log_success "Set ownership to UID 1000 (container user)"
+    fi
+else
+    # Running as non-root user
+    # Try 775 first (safer than 777)
+    if chmod -R 775 "$OPENCLAW_DIR" 2>/dev/null; then
+        ACTUAL_PERMS="775"
+        log_warning "Running as non-root user, set permissions to 775"
+    else
+        # Fallback to 777 if 775 fails (e.g., not the owner)
+        chmod -R 777 "$OPENCLAW_DIR"
+        ACTUAL_PERMS="777"
+        log_warning "Could not set 775 permissions (not owner?), using 777 instead"
+    fi
+    log_warning "For better security on Synology/NAS, consider running with sudo"
+fi
+
+log_success "Created $OPENCLAW_DIR (config)"
+log_success "Created $OPENCLAW_DIR/workspace (workspace)"
 
 log_step "Pulling OpenClaw image..."
 docker pull "$IMAGE"

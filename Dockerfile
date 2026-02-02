@@ -41,7 +41,8 @@ RUN rm -rf .git node_modules/.cache
 
 # Create app user (node already exists in base image)
 RUN mkdir -p /home/node/.openclaw /home/node/.openclaw/workspace \
-    && chown -R node:node /home/node /app
+    && chown -R node:node /home/node /app \
+    && chmod -R 755 /home/node/.openclaw
 
 USER node
 
