@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     stdin_open: true
     tty: true
+    # Uncomment the following line if running on Synology NAS or other systems with UID/GID issues
+    # user: "1000:1000"
     volumes:
       - ~/.openclaw:/home/node/.openclaw
       - ~/.openclaw/workspace:/home/node/.openclaw/workspace
@@ -28,6 +30,8 @@ services:
     container_name: openclaw-cli
     stdin_open: true
     tty: true
+    # Uncomment the following line if running on Synology NAS or other systems with UID/GID issues
+    # user: "1000:1000"
     volumes:
       - ~/.openclaw:/home/node/.openclaw
       - ~/.openclaw/workspace:/home/node/.openclaw/workspace

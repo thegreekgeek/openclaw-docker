@@ -154,6 +154,15 @@ fi
 if ! docker info &> /dev/null; then
     log_error "Docker is not running"
     echo -e "\n${RED}Please start Docker and try again.${NC}"
+    
+    # Check if it's a permission issue
+    if [ "$(id -u)" -ne 0 ] && docker info 2>&1 | grep -q "permission denied"; then
+        echo -e "${YELLOW}Tip: You may need to run this script with sudo or add your user to the docker group:${NC}"
+        echo -e "  sudo usermod -aG docker \$USER"
+        echo -e "  (then log out and log back in)"
+        echo -e "\n${YELLOW}Or run the installer with sudo:${NC}"
+        echo -e "  sudo bash <(curl -fsSL https://raw.githubusercontent.com/phioranex/openclaw-docker/main/install.sh)"
+    fi
     exit 1
 fi
 log_success "Docker is running"
@@ -179,6 +188,21 @@ log_success "Downloaded docker-compose.yml"
 log_step "Creating data directories..."
 mkdir -p ~/.openclaw
 mkdir -p ~/.openclaw/workspace
+
+# Fix permissions for container access
+# Docker container runs as node user (UID 1000, GID 1000)
+# Ensure the directory is writable by the container user
+if [ "$(id -u)" -eq 0 ]; then
+    # Running as root - set ownership to UID 1000 (node user in container)
+    chown -R 1000:1000 ~/.openclaw
+    log_success "Set ownership to UID 1000 (container user)"
+else
+    # Running as non-root user - ensure world-writable permissions for Synology/NAS compatibility
+    chmod -R 777 ~/.openclaw
+    log_warning "Running as non-root user, set permissions to 777"
+    log_warning "For better security on Synology/NAS, consider running with sudo"
+fi
+
 log_success "Created ~/.openclaw (config)"
 log_success "Created ~/.openclaw/workspace (workspace)"
 

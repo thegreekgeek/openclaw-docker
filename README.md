@@ -142,6 +142,59 @@ Config is stored in `~/.openclaw/` and persists across container restarts.
 - [OpenClaw GitHub](https://github.com/openclaw/openclaw)
 - [Discord Community](https://discord.gg/clawd)
 
+## Troubleshooting
+
+### Permission Issues on Synology NAS
+
+If you encounter `EACCES: permission denied` errors when running on Synology NAS:
+
+1. **Option 1: Run install script with sudo (Recommended)**
+   ```bash
+   sudo bash <(curl -fsSL https://raw.githubusercontent.com/phioranex/openclaw-docker/main/install.sh)
+   ```
+   The script will automatically set proper ownership (UID 1000) for the container user.
+
+2. **Option 2: Fix permissions manually**
+   ```bash
+   # Set ownership to UID 1000 (container's node user)
+   sudo chown -R 1000:1000 ~/.openclaw
+   
+   # Or make it world-writable (less secure but works)
+   chmod -R 777 ~/.openclaw
+   ```
+
+3. **Option 3: Use host user mapping**
+   Edit `docker-compose.yml` and uncomment the `user: "1000:1000"` line in both services:
+   ```yaml
+   user: "1000:1000"  # Uncomment this line
+   ```
+
+### Telegram Bot Connection Issues
+
+If the Telegram bot cannot find your username or numeric ID:
+
+1. Ensure your container has internet access:
+   ```bash
+   docker exec openclaw-gateway ping -c 3 api.telegram.org
+   ```
+
+2. Check if firewall or network restrictions are blocking Telegram API access
+
+3. Verify your Telegram bot token is correct in `~/.openclaw/openclaw.json`
+
+### Docker Permission Issues (Image Pull)
+
+If you need root/sudo to pull Docker images:
+
+1. Add your user to the docker group:
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+
+2. Log out and log back in for the changes to take effect
+
+3. Alternatively, use `sudo` when running the install script
+
 ## YouTube Tutorial
 
 📺 Watch the installation tutorial: [Coming Soon]
