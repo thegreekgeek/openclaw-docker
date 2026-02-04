@@ -18,6 +18,7 @@ services:
       - "18789:18789"
       - "18790:18790"
     environment:
+      - GATEWAY_HOST=0.0.0.0
       - NODE_ENV=production
       - OPENCLAW_SKIP_SERVICE_CHECK=true
     command: ["gateway"]
