@@ -20,15 +20,24 @@ services:
     environment:
       - GATEWAY_HOST=0.0.0.0
       - NODE_ENV=production
+      - GATEWAY_PORT=18789
+      # This allows OpenClaw to accept traffic from your proxy
+      - GATEWAY_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8
       - OPENCLAW_SKIP_SERVICE_CHECK=true
     command: ["gateway"]
+    networks:
+      - tsdproxy_network
+
+networks:
+  tsdproxy_network:
+    external: true
   
   socat-proxy:
     image: alpine/socat
     container_name: openclaw-socat
     restart: unless-stopped
     network_mode: "service:openclaw-gateway"
-    command: "TCP-LISTEN:18790,fork,bind=0.0.0.0,reuseaddr TCP:127.0.0.1:18789"
+    command: "TCP-LISTEN:18790,fork,reuseaddr TCP:0.0.0.0:18789"
 
   openclaw-cli:
     image: ghcr.io/phioranex/openclaw-docker:main
