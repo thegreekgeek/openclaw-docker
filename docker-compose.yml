@@ -26,7 +26,7 @@ services:
       - OPENCLAW_SKIP_SERVICE_CHECK=true
     command: ["gateway"]
     networks:
-      - tsdproxy_network
+      - tsdproxy_default
 
   socat-proxy:
     image: alpine/socat
@@ -52,5 +52,5 @@ services:
       - cli
 
 networks:
-  tsdproxy_network:
+  tsdproxy_default:
     external: true
