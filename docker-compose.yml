@@ -28,10 +28,6 @@ services:
     networks:
       - tsdproxy_network
 
-networks:
-  tsdproxy_network:
-    external: true
-  
   socat-proxy:
     image: alpine/socat
     container_name: openclaw-socat
@@ -54,3 +50,7 @@ networks:
     entrypoint: ["node", "/app/dist/index.js"]
     profiles:
       - cli
+
+networks:
+  tsdproxy_network:
+    external: true
